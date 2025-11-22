@@ -20,4 +20,4 @@ pico_enable_stdio_uart(i2cs-pico 0)
 
 pico_add_extra_outputs(i2cs-pico)
 
-target_link_libraries(i2cs-pico pico_stdlib)
+target_link_libraries(i2cs-pico pico_stdlib hardware_i2c)
