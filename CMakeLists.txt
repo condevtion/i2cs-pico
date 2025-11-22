@@ -9,6 +9,8 @@ pico_sdk_init()
 
 add_executable(i2cs-pico
 	main.c
+	bus.h
+	bus.c
 )
 
 add_compile_definitions(
