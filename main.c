@@ -18,7 +18,7 @@ const char* i2c_addr_check(uint8_t addr)
 {
 	uint8_t data;
 
-	switch (i2c_read_blocking(i2c_default, addr, &data, 1, false))
+	switch (i2c_read_timeout_us(i2c_default, addr, &data, 1, false, 100000))
 	{
 	case PICO_ERROR_GENERIC:
 		return "no";
@@ -47,6 +47,8 @@ int main()
 	i2c_init(i2c_default, 100 * 1000);
 	gpio_set_function(PICO_DEFAULT_I2C_SDA_PIN, GPIO_FUNC_I2C);
 	gpio_set_function(PICO_DEFAULT_I2C_SCL_PIN, GPIO_FUNC_I2C);
+	gpio_pull_up(PICO_DEFAULT_I2C_SDA_PIN);
+	gpio_pull_up(PICO_DEFAULT_I2C_SCL_PIN);
 
 	printf("SPL07-003......: %s\r\n", i2c_addr_check(SPL07_003_ADDR));
 	printf("SPL07-003 (alt): %s\r\n", i2c_addr_check(SPL07_003_ADDR_ALT));
