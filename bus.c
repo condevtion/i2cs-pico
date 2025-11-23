@@ -3,25 +3,27 @@
 
 #include "hardware/i2c.h"
 
-#define BUS_FREQ    (100 * 1000) // 100 kHz
-#define BUS_TIMEOUT (100 * 1000) // 100 ms
+#include "bus.h"
 
 void bus_setup(void)
 {
-	bi_decl(bi_2pins_with_func(PICO_DEFAULT_I2C_SDA_PIN, PICO_DEFAULT_I2C_SCL_PIN, GPIO_FUNC_I2C));
+	bi_decl(bi_2pins_with_func(BUS_SDA_PIN, BUS_SCL_PIN, GPIO_FUNC_I2C));
 
-	i2c_init(i2c_default, BUS_FREQ);
-	gpio_set_function(PICO_DEFAULT_I2C_SDA_PIN, GPIO_FUNC_I2C);
-	gpio_set_function(PICO_DEFAULT_I2C_SCL_PIN, GPIO_FUNC_I2C);
-	gpio_pull_up(PICO_DEFAULT_I2C_SDA_PIN);
-	gpio_pull_up(PICO_DEFAULT_I2C_SCL_PIN);
+	i2c_init(BUS_DEVICE, BUS_FREQ);
+	gpio_set_function(BUS_SDA_PIN, GPIO_FUNC_I2C);
+	gpio_set_function(BUS_SCL_PIN, GPIO_FUNC_I2C);
+
+#ifdef BUS_MCU_PULLUP
+	gpio_pull_up(BUS_SDA_PIN);
+	gpio_pull_up(BUS_SCL_PIN);
+#endif
 }
 
 int bus_addr_check(uint8_t addr)
 {
 	uint8_t data;
 
-	return i2c_read_timeout_us(i2c_default, addr, &data, 1, false, BUS_TIMEOUT);
+	return i2c_read_timeout_us(BUS_DEVICE, addr, &data, 1, false, BUS_TIMEOUT);
 }
 
 const char *bus_addr_check_to_str(int result)
@@ -43,29 +45,29 @@ int bus_write_byte(uint8_t addr, uint8_t reg, uint8_t data)
 {
 	uint8_t buffer[2] = {reg, data};
 
-	return i2c_write_timeout_us(i2c_default, addr, buffer, sizeof(buffer)/sizeof(uint8_t), false, BUS_TIMEOUT);
+	return i2c_write_timeout_us(BUS_DEVICE, addr, buffer, sizeof(buffer)/sizeof(buffer[0]), false, BUS_TIMEOUT);
 }
 
 int bus_read_byte(uint8_t addr, uint8_t reg, uint8_t *dst)
 {
-	int r = i2c_write_timeout_us(i2c_default, addr, &reg, 1, false, BUS_TIMEOUT);
+	int r = i2c_write_timeout_us(BUS_DEVICE, addr, &reg, 1, false, BUS_TIMEOUT);
 	if (r != 1) return r;
 
-	return i2c_read_timeout_us(i2c_default, addr, dst, 1, false, BUS_TIMEOUT);
+	return i2c_read_timeout_us(BUS_DEVICE, addr, dst, 1, false, BUS_TIMEOUT);
 }
 
 int bus_read_word(uint8_t addr, uint8_t reg, uint16_t *dst)
 {
-	int r = i2c_write_timeout_us(i2c_default, addr, &reg, 1, false, BUS_TIMEOUT);
+	int r = i2c_write_timeout_us(BUS_DEVICE, addr, &reg, 1, false, BUS_TIMEOUT);
 	if (r != 1) return r;
 
-	return i2c_read_timeout_us(i2c_default, addr, (uint8_t *)dst, 2, false, BUS_TIMEOUT);
+	return i2c_read_timeout_us(BUS_DEVICE, addr, (uint8_t *)dst, 2, false, BUS_TIMEOUT);
 }
 
 int bus_read_qword(uint8_t addr, uint8_t reg, uint64_t *dst)
 {
-	int r = i2c_write_timeout_us(i2c_default, addr, &reg, 1, false, BUS_TIMEOUT);
+	int r = i2c_write_timeout_us(BUS_DEVICE, addr, &reg, 1, false, BUS_TIMEOUT);
 	if (r != 1) return r;
 
-	return i2c_read_timeout_us(i2c_default, addr, (uint8_t *)dst, 4, false, BUS_TIMEOUT);
+	return i2c_read_timeout_us(BUS_DEVICE, addr, (uint8_t *)dst, 4, false, BUS_TIMEOUT);
 }
