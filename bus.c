@@ -17,17 +17,55 @@ void bus_setup(void)
 	gpio_pull_up(PICO_DEFAULT_I2C_SCL_PIN);
 }
 
-const char *bus_addr_check(uint8_t addr)
+int bus_addr_check(uint8_t addr)
 {
 	uint8_t data;
 
-	switch (i2c_read_timeout_us(i2c_default, addr, &data, 1, false, BUS_TIMEOUT))
+	return i2c_read_timeout_us(i2c_default, addr, &data, 1, false, BUS_TIMEOUT);
+}
+
+const char *bus_addr_check_to_str(int result)
+{
+	switch (result)
 	{
 	case PICO_ERROR_GENERIC:
-		return "no";
+		return "error";
 	case PICO_ERROR_TIMEOUT:
 		return "timeout";
+	case 1:
+		return "ok";
 	}
 
-	return "yes";
+	return "unknown";
+}
+
+int bus_write_byte(uint8_t addr, uint8_t reg, uint8_t data)
+{
+	uint8_t buffer[2] = {reg, data};
+
+	return i2c_write_timeout_us(i2c_default, addr, buffer, sizeof(buffer)/sizeof(uint8_t), false, BUS_TIMEOUT);
+}
+
+int bus_read_byte(uint8_t addr, uint8_t reg, uint8_t *dst)
+{
+	int r = i2c_write_timeout_us(i2c_default, addr, &reg, 1, false, BUS_TIMEOUT);
+	if (r != 1) return r;
+
+	return i2c_read_timeout_us(i2c_default, addr, dst, 1, false, BUS_TIMEOUT);
+}
+
+int bus_read_word(uint8_t addr, uint8_t reg, uint16_t *dst)
+{
+	int r = i2c_write_timeout_us(i2c_default, addr, &reg, 1, false, BUS_TIMEOUT);
+	if (r != 1) return r;
+
+	return i2c_read_timeout_us(i2c_default, addr, (uint8_t *)dst, 2, false, BUS_TIMEOUT);
+}
+
+int bus_read_qword(uint8_t addr, uint8_t reg, uint64_t *dst)
+{
+	int r = i2c_write_timeout_us(i2c_default, addr, &reg, 1, false, BUS_TIMEOUT);
+	if (r != 1) return r;
+
+	return i2c_read_timeout_us(i2c_default, addr, (uint8_t *)dst, 4, false, BUS_TIMEOUT);
 }

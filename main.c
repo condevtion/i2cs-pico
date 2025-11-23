@@ -30,10 +30,17 @@ int main()
 
 	bus_setup();
 
-	printf("SPL07-003......: %s\r\n", bus_addr_check(SPL07_003_ADDR));
-	printf("SPL07-003 (alt): %s\r\n", bus_addr_check(SPL07_003_ADDR_ALT));
-	printf("ENS210.........: %s\r\n", bus_addr_check(ENS210_ADDR));
-	printf("APDS-9999......: %s\r\n", bus_addr_check(APDS_9999_ADDR));
+	int r = bus_addr_check(SPL07_003_ADDR);
+	printf("SPL07-003......: %s\r\n", bus_addr_check_to_str(r));
+
+	r = bus_addr_check(SPL07_003_ADDR_ALT);
+	printf("SPL07-003 (alt): %s\r\n", bus_addr_check_to_str(r));
+
+	r = bus_addr_check(ENS210_ADDR);
+	printf("ENS210.........: %s\r\n", bus_addr_check_to_str(r));
+
+	r = bus_addr_check(APDS_9999_ADDR);
+	printf("APDS-9999......: %s\r\n", bus_addr_check_to_str(r));
 
 	while (1)
 	{
