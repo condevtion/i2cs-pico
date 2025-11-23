@@ -4,15 +4,15 @@
 #include "pico/stdlib.h"
 
 #include "bus.h"
+#include "prs.h"
+#include "rhs.h"
+#include "als.h"
 
 #define PROJ_DESC "I2CS Board RPi2 Example"
 
 #define INTERVAL 400
 
-#define SPL07_003_ADDR     0x77
-#define SPL07_003_ADDR_ALT 0x76
-#define ENS210_ADDR        0x43
-#define APDS_9999_ADDR     0x52
+void report_sensor(const char *name, int r, const uint8_t *addr);
 
 int main()
 {
@@ -30,20 +30,30 @@ int main()
 
 	bus_setup();
 
-	int r = bus_addr_check(SPL07_003_ADDR);
-	printf("SPL07-003......: %s\r\n", bus_addr_check_to_str(r));
+	puts("Enumerating sensors:\r");
+	uint8_t prs_addr;
+	report_sensor("SPL07-003", prs_find(&prs_addr), &prs_addr);
 
-	r = bus_addr_check(SPL07_003_ADDR_ALT);
-	printf("SPL07-003 (alt): %s\r\n", bus_addr_check_to_str(r));
+	uint8_t rhs_addr;
+	report_sensor("ENS210...", rhs_find(&rhs_addr), &rhs_addr);
 
-	r = bus_addr_check(ENS210_ADDR);
-	printf("ENS210.........: %s\r\n", bus_addr_check_to_str(r));
-
-	r = bus_addr_check(APDS_9999_ADDR);
-	printf("APDS-9999......: %s\r\n", bus_addr_check_to_str(r));
+	uint8_t als_addr;
+	report_sensor("APDS-9999", als_find(&als_addr), &als_addr);
 
 	while (1)
 	{
 		tight_loop_contents();
+	}
+}
+
+void report_sensor(const char *name, int r, const uint8_t *addr)
+{
+	if (r < 0)
+	{
+		printf("\t%s: %s\r\n", name, bus_addr_check_to_str(r));
+	}
+	else
+	{
+		printf("\t%s: 0x%02hhx\r\n", name, *addr);
 	}
 }

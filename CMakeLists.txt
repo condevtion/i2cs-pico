@@ -11,6 +11,12 @@ add_executable(i2cs-pico
 	main.c
 	bus.h
 	bus.c
+	prs.h
+	prs.c
+	rhs.h
+	rhs.c
+	als.h
+	als.c
 )
 
 add_compile_definitions(
