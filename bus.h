@@ -1,6 +1,8 @@
 #ifndef BUS_H
 #define BUS_H
 
+#include <stddef.h>
+
 #ifndef BUS_FREQ
 #define BUS_FREQ    (100 * 1000) // 100 kHz
 #endif
@@ -23,10 +25,14 @@
 #define BUS_SCL_PIN PICO_DEFAULT_I2C_SCL_PIN
 #endif
 
+#define BUS_ADDR_MAX     0x7f
+#define BUS_ADDR_INVALID 0xff
+
+const char *bus_error_to_str(int result);
+
 void bus_setup(void);
 
 int bus_addr_check(uint8_t addr);
-const char *bus_addr_check_to_str(int result);
 
 int bus_write_byte(uint8_t addr, uint8_t reg, uint8_t data);
 

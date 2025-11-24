@@ -1,17 +1,87 @@
 #include <stdint.h>
 
+#include "pico/error.h"
+#include "pico/time.h"
+
 #include "bus.h"
 #include "rhs.h"
 
 int rhs_find(uint8_t *addr)
 {
 	int r = bus_addr_check(RHS_ADDR);
-	if (r < 0)
+	if (r != PICO_OK)
 	{
-		*addr = 0;
+		*addr = BUS_ADDR_INVALID;
 		return r;
 	}
 
 	*addr = RHS_ADDR;
-	return 0;
+	return PICO_OK;
+}
+
+int rhs_activate(uint8_t addr)
+{
+	int r = bus_write_byte(addr, RHS_REG_SYS_CTRL, 0);
+	if (r != PICO_OK)
+	{
+		return r;
+	}
+
+	uint8_t data;
+	for (int i = 0; i < 3; i++)
+	{
+		sleep_us(RHS_T_BOOTING);
+		r = bus_read_byte(addr, RHS_REG_SYS_STAT, &data);
+		if (r != PICO_OK)
+		{
+			return r;
+		}
+
+		if (data & RHS_SYS_STAT_ACTIVE)
+		{
+			return PICO_OK;
+		}
+	}
+
+	return PICO_ERROR_TIMEOUT;
+}
+
+int rhs_deactivate(uint8_t addr)
+{
+	return bus_write_byte(addr, RHS_REG_SYS_CTRL, RHS_SYS_CTRL_LOW_POWER);
+}
+
+int rhs_get_id(uint8_t addr, uint16_t *id, uint16_t *rev, uint64_t *uid)
+{
+	int r = rhs_activate(addr);
+	if (r != PICO_OK)
+	{
+		return r;
+	}
+
+	r = bus_read_word(addr, RHS_REG_PART_ID, id);
+	if (r != PICO_OK)
+	{
+		rhs_deactivate(addr);
+		return r;
+	}
+
+	r = bus_read_word(addr, RHS_REG_DIE_REV, rev);
+	if (r != PICO_OK)
+	{
+		rhs_deactivate(addr);
+		return r;
+	}
+
+	if (uid)
+	{
+		r = bus_read_qword(addr, RHS_REG_UID, uid);
+		if (r != PICO_OK)
+		{
+			rhs_deactivate(addr);
+			return r;
+		}
+	}
+
+	return rhs_deactivate(addr);
 }
