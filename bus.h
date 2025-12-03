@@ -36,6 +36,7 @@ int bus_addr_check(uint8_t addr);
 
 int bus_write_byte(uint8_t addr, uint8_t reg, uint8_t data);
 
+int bus_read_block(uint8_t addr, uint8_t reg, uint8_t *dst, size_t len);
 int bus_read_byte(uint8_t addr, uint8_t reg, uint8_t *dst);
 int bus_read_word(uint8_t addr, uint8_t reg, uint16_t *dst);
 int bus_read_qword(uint8_t addr, uint8_t reg, uint64_t *dst);

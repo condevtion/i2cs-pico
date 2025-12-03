@@ -20,6 +20,8 @@ void check_prs_id(uint8_t *addr);
 void check_rhs_id(uint8_t *addr);
 void check_als_id(uint8_t *addr);
 
+void show_prs_coefs(uint8_t addr);
+
 int main()
 {
 	bi_decl(bi_program_description(PROJ_DESC));
@@ -40,6 +42,7 @@ int main()
 	enumerate_sensors(&prs_addr, &rhs_addr, &als_addr);
 	check_sensors(&prs_addr, &rhs_addr, &als_addr);
 
+	show_prs_coefs(prs_addr);
 
 	while (1)
 	{
@@ -157,4 +160,42 @@ void check_als_id(uint8_t *addr)
 		printf("\tAPDS-9999 ID: %hhu.%hhu\r\n",
 		       (id & 0xf0) >> 4, id & 0x0f);
 	}
+}
+
+void show_prs_coefs(uint8_t addr)
+{
+	if (addr > BUS_ADDR_MAX) return;
+
+	puts("\nSPL07-003 Calibration Coefficients:\r");
+
+	bool rdy = false;
+	int r = prs_wait_coefs(addr, &rdy);
+	if (r != PICO_OK)
+	{
+		printf("\terror while waiting for the coefficients: %d\r\n", r);
+		return;
+	}
+	if (!rdy)
+	{
+		puts("\tthe coefficients aren't ready\r");
+		return;
+	}
+
+	prs_coefs_t coefs;
+	r = prs_read_coefs(addr, &coefs);
+	if (r != PICO_OK)
+	{
+		printf("\terror while reading the coefficients: %d\r\n", r);
+	}
+
+	printf("\tc0: %+8hd, c00: %+8d, c01: %+8hd\r\n"     \
+	       "\tc1: %+8hd, c10: %+8d, c11: %+8hd\r\n"     \
+	       "\t              c20: %+8hd, c21: %+8hd\r\n" \
+	       "\t              c30: %+8hd, c31: %+8hd\r\n" \
+	       "\t              c40: %+8hd\r\n",
+	       coefs.c0, coefs.c00, coefs.c01,
+	       coefs.c1, coefs.c10, coefs.c11,
+	                 coefs.c20, coefs.c21,
+	                 coefs.c30, coefs.c31,
+	                 coefs.c40);
 }

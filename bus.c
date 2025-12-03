@@ -60,41 +60,30 @@ int bus_write_byte(uint8_t addr, uint8_t reg, uint8_t data)
 	return PICO_OK;
 }
 
-int bus_read_byte(uint8_t addr, uint8_t reg, uint8_t *dst)
+int bus_read_block(uint8_t addr, uint8_t reg, uint8_t *dst, size_t len)
 {
 	int r = i2c_write_timeout_us(BUS_DEVICE, addr, &reg, BUS_SIZE_BYTE, false, BUS_TIMEOUT);
 	if (r < 0) return r;
 	if (r != BUS_SIZE_BYTE) return PICO_ERROR_GENERIC;
 
-	r = i2c_read_timeout_us(BUS_DEVICE, addr, dst, BUS_SIZE_BYTE, false, BUS_TIMEOUT);
+	r = i2c_read_timeout_us(BUS_DEVICE, addr, dst, len, false, BUS_TIMEOUT);
 	if (r < 0) return r;
-	if (r != BUS_SIZE_BYTE) return PICO_ERROR_GENERIC;
+	if (r != len) return PICO_ERROR_GENERIC;
 
 	return PICO_OK;
+}
+
+int bus_read_byte(uint8_t addr, uint8_t reg, uint8_t *dst)
+{
+	return bus_read_block(addr, reg, dst, BUS_SIZE_BYTE);
 }
 
 int bus_read_word(uint8_t addr, uint8_t reg, uint16_t *dst)
 {
-	int r = i2c_write_timeout_us(BUS_DEVICE, addr, &reg, BUS_SIZE_BYTE, false, BUS_TIMEOUT);
-	if (r < 0) return r;
-	if (r != BUS_SIZE_BYTE) return PICO_ERROR_GENERIC;
-
-	r = i2c_read_timeout_us(BUS_DEVICE, addr, (uint8_t *)dst, BUS_SIZE_WORD, false, BUS_TIMEOUT);
-	if (r < 0) return r;
-	if (r != BUS_SIZE_WORD) return PICO_ERROR_GENERIC;
-
-	return PICO_OK;
+	return bus_read_block(addr, reg, (uint8_t *)dst, BUS_SIZE_WORD);
 }
 
 int bus_read_qword(uint8_t addr, uint8_t reg, uint64_t *dst)
 {
-	int r = i2c_write_timeout_us(BUS_DEVICE, addr, &reg, BUS_SIZE_BYTE, false, BUS_TIMEOUT);
-	if (r < 0) return r;
-	if (r != BUS_SIZE_BYTE) return PICO_ERROR_GENERIC;
-
-	r = i2c_read_timeout_us(BUS_DEVICE, addr, (uint8_t *)dst, BUS_SIZE_QWORD, false, BUS_TIMEOUT);
-	if (r < 0) return r;
-	if (r != BUS_SIZE_QWORD) return PICO_ERROR_GENERIC;
-
-	return PICO_OK;
+	return bus_read_block(addr, reg, (uint8_t *)dst, BUS_SIZE_QWORD);
 }
