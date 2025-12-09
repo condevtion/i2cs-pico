@@ -17,6 +17,8 @@ add_executable(i2cs-pico
 	rhs.c
 	als.h
 	als.c
+	meas.h
+	meas.c
 )
 
 add_compile_definitions(

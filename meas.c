@@ -1,0 +1,219 @@
+#include <stdio.h>
+#include <math.h>
+
+#include "pico/stdlib.h"
+
+#include "bus.h"
+#include "prs.h"
+
+#include "meas.h"
+
+void int_setup(uint gpio)
+{
+	gpio_init(gpio);
+	gpio_set_dir(gpio,GPIO_IN);
+	gpio_pull_up(gpio);
+}
+
+void setup_prs(uint8_t addr, prs_coefs_t *coefs, int32_t *prs_k, int32_t *tmp_k)
+{
+	if (addr > BUS_ADDR_MAX) return;
+
+	puts("\nSPL07-003 Calibration Coefficients:\r");
+
+	bool rdy = false;
+	int r = prs_wait_coefs(addr, &rdy);
+	if (r != PICO_OK)
+	{
+		printf("\terror while waiting for the coefficients: %d\r\n", r);
+		return;
+	}
+	if (!rdy)
+	{
+		puts("\tthe coefficients aren't ready\r");
+		return;
+	}
+
+	r = prs_read_coefs(addr, coefs);
+	if (r != PICO_OK)
+	{
+		printf("\terror while reading the coefficients: %d\r\n", r);
+	}
+
+	printf("\tc0: %+8hd, c00: %+8d, c01: %+8hd\r\n"     \
+	       "\tc1: %+8hd, c10: %+8d, c11: %+8hd\r\n"     \
+	       "\t              c20: %+8hd, c21: %+8hd\r\n" \
+	       "\t              c30: %+8hd, c31: %+8hd\r\n" \
+	       "\t              c40: %+8hd\r\n",
+	       coefs->c0, coefs->c00, coefs->c01,
+	       coefs->c1, coefs->c10, coefs->c11,
+	       coefs->c20, coefs->c21,
+	       coefs->c30, coefs->c31,
+	       coefs->c40);
+
+	*prs_k = prs_prc_to_k(PRS_PRC_16);
+	*tmp_k = prs_prc_to_k(PRS_PRC_1);
+
+	printf("\nConfiguring pressure sensor (p scale %d, t scale %d)...", prs_k, tmp_k);
+	r = prs_config(addr, PRS_PRC_16, PRS_PRC_1);
+	if (r != PICO_OK)
+	{
+		printf(" error: %d\r\n", r);
+		return;
+	}
+	puts(" ok\r");
+}
+
+void _clr_int(uint8_t addr)
+{
+	printf("Interrupt status:");
+	uint8_t sts;
+	int r = bus_read_byte(addr, PRS_INT_STS, &sts);
+	if (r != PICO_OK)
+	{
+		printf(" error: %d\r\n");
+	}
+	else
+	{
+		printf(" INT_PRS: %c, INT_TMP: %c, INT_FIFO: %c\r\n",
+		       (sts & PRS_INT_PRS)? 'Y':'N',
+		       (sts & PRS_INT_TMP)? 'Y':'N',
+		       (sts & PRS_INT_FIFO_FULL)? 'Y':'N');
+	}
+
+	printf("Interrupt pin(%d): %d\r\n", PRS_INT_PIN, gpio_get(PRS_INT_PIN));
+}
+
+void _read_prs_raw(uint8_t addr, int32_t k, float *raw_sc)
+{
+	printf("Reading raw pressure value...");
+	int32_t raw;
+	int r = prs_get_prs_raw(addr, &raw);
+	if (r != PICO_OK)
+	{
+		printf(" error: %d\r\n");
+	}
+	else
+	{
+		*raw_sc = (float)raw/k;
+		printf(" p_raw: %d, p_raw_sc: %.7f\r\n", raw, *raw_sc);
+	}
+}
+
+void _read_tmp_raw(uint8_t addr, int32_t k, float *raw_sc)
+{
+	printf("Reading raw temperature value from pressure sensor...");
+	int32_t raw;
+	int r = prs_get_tmp_raw(addr, &raw);
+	if (r != PICO_OK)
+	{
+		printf(" error: %d\r\n");
+	}
+	else
+	{
+		*raw_sc = (float)raw/k;
+		printf(" t_raw: %d, t_raw_sc: %.7f\r\n", raw, *raw_sc);
+	}
+}
+
+int _wait_for_value(uint8_t addr, int32_t prs_k, int32_t tmp_k, float *p_raw_sc, float *t_raw_sc)
+{
+	absolute_time_t start = get_absolute_time();
+	for (int i=1; i < 100000000; i++)
+	{
+		if (!gpio_get(PRS_INT_PIN))
+		{
+			absolute_time_t end = get_absolute_time();
+			printf(" done (int@%d - 0): %lld us (%d clk)\r\n",
+			       PRS_INT_PIN, absolute_time_diff_us(start, end), i);
+
+			printf("Reading pressure sensor operating status...");
+			uint8_t cfg = 0;
+			int r = bus_read_byte(addr, PRS_MEAS_CFG, &cfg);
+			if (r != PICO_OK)
+			{
+				printf(" error: %d\r\n", r);
+				return r;
+			}
+			printf(" PRS_RDY: %c, TMP_RDY: %c\r\n",
+			       (cfg & PRS_PRS_RDY)? 'Y':'N',
+			       (cfg & PRS_TMP_RDY)? 'Y':'N');
+
+			_clr_int(addr);
+
+			if (cfg & PRS_PRS_RDY)
+			{
+				_read_prs_raw(addr, prs_k, p_raw_sc);
+			}
+
+			if (cfg & PRS_TMP_RDY)
+			{
+				_read_tmp_raw(addr, tmp_k, t_raw_sc);
+			}
+
+			return PICO_OK;
+		}
+
+		if (!(i%16000000))
+		{
+			puts(".\r");
+		}
+		else if (!(i%400000))
+		{
+			putchar('.');
+		}
+	}
+
+	return PICO_ERROR_GENERIC;
+}
+
+void measure_prs(uint8_t addr, size_t n, const prs_coefs_t *coefs, int32_t prs_k, int32_t tmp_k)
+{
+	if (addr > BUS_ADDR_MAX) return;
+
+	printf("Interrupt pin(%d): %d\r\n", PRS_INT_PIN, gpio_get(PRS_INT_PIN));
+
+	printf("Starting pressure measurement...");
+	int r = prs_meas_config(addr);
+	if (r != PICO_OK)
+	{
+		printf(" error: %d\r\n", r);
+		return;
+	}
+	puts(" ok\r");
+
+	float p_raw_sc = NAN, t_raw_sc = NAN;
+	if (_wait_for_value(addr, prs_k, tmp_k, &p_raw_sc, &t_raw_sc) != PICO_OK)
+	{
+		return;
+	}
+
+	if ((isnan(p_raw_sc) || isnan(t_raw_sc)) &&
+	    _wait_for_value(addr, prs_k, tmp_k, &p_raw_sc, &t_raw_sc) != PICO_OK)
+	{
+		return;
+	}
+
+	if (isnan(t_raw_sc))
+	{
+		puts("SPL07-003 - T: NaN, P: NaN\r");
+		return;
+	}
+
+	float t = coefs->c0*0.5 + coefs->c1 * t_raw_sc;
+
+	if (isnan(p_raw_sc))
+	{
+		printf("SPL07-003 - T: %.2f C, P: NaN\r\n", t);
+		return;
+	}
+
+	float p = p_raw_sc;
+	float p2 = p * p;
+	float p3 = p2 * p;
+	float p4 = p3 * p;
+	float pt_corr = t_raw_sc*(coefs->c01 + coefs->c11*p + coefs->c21*p2 + coefs->c31*p3);
+
+	p = pt_corr + coefs->c00 + coefs->c10*p + coefs->c20*p2 + coefs->c30*p3 + coefs->c40*p4;
+	printf("SPL07-003(%09lu) - T: %.1f C, P: %.2f mbar\r\n", n, t, p/100);
+}
