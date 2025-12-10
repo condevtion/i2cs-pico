@@ -5,6 +5,7 @@
 
 #include "bus.h"
 #include "prs.h"
+#include "rhs.h"
 
 #include "meas.h"
 
@@ -167,7 +168,7 @@ int _wait_for_value(uint8_t addr, int32_t prs_k, int32_t tmp_k, float *p_raw_sc,
 	return PICO_ERROR_GENERIC;
 }
 
-void measure_prs(uint8_t addr, size_t n, const prs_coefs_t *coefs, int32_t prs_k, int32_t tmp_k)
+void measure_prs(uint8_t addr)
 {
 	if (addr > BUS_ADDR_MAX) return;
 
@@ -181,6 +182,11 @@ void measure_prs(uint8_t addr, size_t n, const prs_coefs_t *coefs, int32_t prs_k
 		return;
 	}
 	puts(" ok\r");
+}
+
+void read_prs_data(uint8_t addr, size_t n, const prs_coefs_t *coefs, int32_t prs_k, int32_t tmp_k)
+{
+	if (addr > BUS_ADDR_MAX) return;
 
 	float p_raw_sc = NAN, t_raw_sc = NAN;
 	if (_wait_for_value(addr, prs_k, tmp_k, &p_raw_sc, &t_raw_sc) != PICO_OK)
@@ -216,4 +222,64 @@ void measure_prs(uint8_t addr, size_t n, const prs_coefs_t *coefs, int32_t prs_k
 
 	p = pt_corr + coefs->c00 + coefs->c10*p + coefs->c20*p2 + coefs->c30*p3 + coefs->c40*p4;
 	printf("SPL07-003(%09lu) - T: %.1f C, P: %.2f mbar\r\n", n, t, p/100);
+}
+
+void measure_rh(uint8_t addr)
+{
+	if (addr > BUS_ADDR_MAX) return;
+
+	printf("Starting relative humidity measurement...");
+	int r = rhs_start(addr);
+	if (r != PICO_OK)
+	{
+		printf(" error: %d\r\n", r);
+		return;
+	}
+	puts(" ok\r");
+
+	absolute_time_t start = get_absolute_time();
+	sleep_us(RHS_T_CONV_TH_SINGLE);
+
+	absolute_time_t end = get_absolute_time();
+	printf(" done: %lld us\r\n", absolute_time_diff_us(start, end));
+
+	printf("Reading relative humidity sensor data...");
+	uint32_t t_data, h_data;
+	bool t_valid, h_valid;
+	uint8_t t_crc, h_crc;
+	r = rhs_read_values(addr,
+	                    &t_data, &t_valid, &t_crc,
+	                    &h_data, &h_valid, &h_crc);
+	if (r != PICO_OK)
+	{
+		printf(" error: %d\r\n", r);
+		return;
+	}
+	puts(" ok\r");
+
+	float t = (float)t_data / 64 - 273.15;
+	printf("ENS210 T.: %.2f C (0x%04hx), valid: %c, CRC: 0x%02hhx",
+	       t, t_data, t_valid? 'Y': 'N', t_crc);
+	uint8_t calc_crc = rhs_crc7(t_data + (t_valid? 0x10000:0));
+	if (calc_crc == t_crc)
+	{
+		puts(" (ok)\r");
+	}
+	else
+	{
+		printf(" (fail: 0x%02hhx)\r\n", calc_crc);
+	}
+
+	float h = (float)h_data / 512;
+	printf("ENS210 RH: %.1f%%   (0x%04hx), valid: %c, CRC: 0x%02hhx",
+	       h, h_data, h_valid? 'Y': 'N', h_crc);
+	calc_crc = rhs_crc7(h_data + (h_valid? 0x10000:0));
+	if (calc_crc == h_crc)
+	{
+		puts(" (ok)\r");
+	}
+	else
+	{
+		printf(" (fail: 0x%02hhx)\r\n", calc_crc);
+	}
 }

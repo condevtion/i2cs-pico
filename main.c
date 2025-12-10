@@ -51,7 +51,14 @@ int main()
 	i = 0;
 	while(1)
 	{
-		measure_prs(prs_addr, ++i, &prs_coefs, prs_k, tmp_k);
+		i++;
+
+		measure_prs(prs_addr);
+		if (i > 1)
+		{
+			measure_rh(rhs_addr);
+		}
+		read_prs_data(prs_addr, i, &prs_coefs, prs_k, tmp_k);
 	}
 }
 

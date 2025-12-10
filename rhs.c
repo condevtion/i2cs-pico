@@ -85,3 +85,55 @@ int rhs_get_id(uint8_t addr, uint16_t *id, uint16_t *rev, uint64_t *uid)
 
 	return rhs_deactivate(addr);
 }
+
+#define _DATA7_WIDTH 17
+#define _DATA7_MASK  ((1<<_DATA7_WIDTH) - 1)
+#define _DATA7_MSB   (1<<(_DATA7_WIDTH-1))
+
+#define _CRC7_WIDTH  7
+#define _CRC7_POLY   0x89
+#define _CRC7_IVEC   0x7f
+
+#define _DATA7_MASK_HIGH (_DATA7_MASK<<_CRC7_WIDTH)
+#define _CRC7_IPOL       (_CRC7_POLY<<(_DATA7_WIDTH-1))
+#define _CRC7_IBIT       (_DATA7_MSB<<_CRC7_WIDTH)
+
+uint8_t rhs_crc7(uint32_t x)
+{
+	x = ((x & _DATA7_MASK) << _CRC7_WIDTH) | _CRC7_IVEC;
+	uint32_t p = _CRC7_IPOL, b = _CRC7_IBIT;
+	while (b & _DATA7_MASK_HIGH)
+	{
+		if (b & x) x ^= p;
+		p >>= 1;
+		b >>= 1;
+	}
+	return x;
+}
+
+int rhs_start(uint8_t addr)
+{
+	return bus_write_byte(addr, RHS_REG_SENS_START, RHS_H_START | RHS_T_START);
+}
+
+int rhs_read_values(uint8_t addr,
+                    uint32_t *t_data, bool *t_valid, uint8_t *t_crc,
+                    uint32_t *h_data, bool *h_valid, uint8_t *h_crc)
+{
+	uint8_t data[6];
+	int r = bus_read_block(addr, RHS_REG_T_VAL, data, sizeof(data)/sizeof(data[0]));
+	if (r != PICO_OK)
+	{
+		return r;
+	}
+
+	*t_data = (uint32_t)data[0] | ((uint32_t)data[1]<<8);
+	*t_valid = data[2] & 1;
+	*t_crc = (data[2]>>1) & 0x7f;
+
+	*h_data = (uint32_t)data[3] | ((uint32_t)data[4]<<8);
+	*h_valid = data[5] & 1;
+	*h_crc = (data[5]>>1) & 0x7f;
+
+	return PICO_OK;
+}
