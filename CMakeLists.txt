@@ -17,6 +17,8 @@ add_executable(i2cs-pico
 	rhs.c
 	als.h
 	als.c
+	check.h
+	check.c
 	meas.h
 	meas.c
 )
