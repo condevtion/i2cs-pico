@@ -125,8 +125,11 @@ int _wait_for_value(uint8_t addr, int32_t prs_k, int32_t tmp_k, float *p_raw_sc,
 		if (!gpio_get(PRS_INT_PIN))
 		{
 			absolute_time_t end = get_absolute_time();
-			printf(" done (int@%d - 0): %lld us (%d clk)\r\n",
-			       PRS_INT_PIN, absolute_time_diff_us(start, end), i);
+			printf(" done (int@%d - 0, %.3f s): %lld us (%d clk)\r\n",
+			       PRS_INT_PIN,
+			       (float)to_ms_since_boot(end)/1000,
+			       absolute_time_diff_us(start, end),
+			       i);
 
 			printf("Reading pressure sensor operating status...");
 			uint8_t cfg = 0;
@@ -202,7 +205,7 @@ void read_prs_data(uint8_t addr, size_t n, const prs_coefs_t *coefs, int32_t prs
 
 	if (isnan(t_raw_sc))
 	{
-		puts("SPL07-003 - T: NaN, P: NaN\r");
+		printf("SPL07-003(%lu) - T: NaN, P: NaN\r\n", n);
 		return;
 	}
 
@@ -210,7 +213,7 @@ void read_prs_data(uint8_t addr, size_t n, const prs_coefs_t *coefs, int32_t prs
 
 	if (isnan(p_raw_sc))
 	{
-		printf("SPL07-003 - T: %.2f C, P: NaN\r\n", t);
+		printf("SPL07-003(%lu) - T: %+.1f C, P: NaN\r\n", t);
 		return;
 	}
 
@@ -221,7 +224,7 @@ void read_prs_data(uint8_t addr, size_t n, const prs_coefs_t *coefs, int32_t prs
 	float pt_corr = t_raw_sc*(coefs->c01 + coefs->c11*p + coefs->c21*p2 + coefs->c31*p3);
 
 	p = pt_corr + coefs->c00 + coefs->c10*p + coefs->c20*p2 + coefs->c30*p3 + coefs->c40*p4;
-	printf("SPL07-003(%09lu) - T: %.1f C, P: %.2f mbar\r\n", n, t, p/100);
+	printf("SPL07-003(%lu) - T: %+.1f C, P: %.2f mbar\r\n", n, t, p/100);
 }
 
 void measure_rh(uint8_t addr)
@@ -241,7 +244,9 @@ void measure_rh(uint8_t addr)
 	sleep_us(RHS_T_CONV_TH_SINGLE);
 
 	absolute_time_t end = get_absolute_time();
-	printf(" done: %lld us\r\n", absolute_time_diff_us(start, end));
+	printf(" done(%.3f s): %lld us\r\n",
+	       (float)to_ms_since_boot(end)/1000,
+	       absolute_time_diff_us(start, end));
 
 	printf("Reading relative humidity sensor data...");
 	uint32_t t_data, h_data;
@@ -258,7 +263,7 @@ void measure_rh(uint8_t addr)
 	puts(" ok\r");
 
 	float t = (float)t_data / 64 - 273.15;
-	printf("ENS210 T.: %.2f C (0x%04hx), valid: %c, CRC: 0x%02hhx",
+	printf("ENS210 T.: %+.2f C (0x%04hx), valid: %c, CRC: 0x%02hhx",
 	       t, t_data, t_valid? 'Y': 'N', t_crc);
 	uint8_t calc_crc = rhs_crc7(t_data + (t_valid? 0x10000:0));
 	if (calc_crc == t_crc)
@@ -271,7 +276,7 @@ void measure_rh(uint8_t addr)
 	}
 
 	float h = (float)h_data / 512;
-	printf("ENS210 RH: %.1f%%   (0x%04hx), valid: %c, CRC: 0x%02hhx",
+	printf("ENS210 RH:  %.1f %%  (0x%04hx), valid: %c, CRC: 0x%02hhx",
 	       h, h_data, h_valid? 'Y': 'N', h_crc);
 	calc_crc = rhs_crc7(h_data + (h_valid? 0x10000:0));
 	if (calc_crc == h_crc)
