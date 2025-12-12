@@ -171,7 +171,7 @@ int _wait_for_value(uint8_t addr, int32_t prs_k, int32_t tmp_k, float *p_raw_sc,
 	return PICO_ERROR_GENERIC;
 }
 
-void measure_prs(uint8_t addr)
+void start_measure_prs(uint8_t addr)
 {
 	if (addr > BUS_ADDR_MAX) return;
 
@@ -227,7 +227,7 @@ void read_prs_data(uint8_t addr, size_t n, const prs_coefs_t *coefs, int32_t prs
 	printf("SPL07-003(%lu) - T: %+.1f C, P: %.2f mbar\r\n", n, t, p/100);
 }
 
-void measure_rh(uint8_t addr)
+void start_measure_rhs(uint8_t addr, absolute_time_t *deadline, absolute_time_t *start)
 {
 	if (addr > BUS_ADDR_MAX) return;
 
@@ -236,13 +236,32 @@ void measure_rh(uint8_t addr)
 	if (r != PICO_OK)
 	{
 		printf(" error: %d\r\n", r);
+
+		if (deadline)
+		{
+			*deadline = nil_time;
+		}
 		return;
 	}
 	puts(" ok\r");
 
-	absolute_time_t start = get_absolute_time();
-	sleep_us(RHS_T_CONV_TH_SINGLE);
+	absolute_time_t _start = get_absolute_time();
+	if (start)
+	{
+		*start = _start;
+	}
 
+	if (deadline)
+	{
+		*deadline = delayed_by_us(_start, RHS_T_CONV_TH_SINGLE);
+	}
+}
+
+void read_rhs_data(uint8_t addr, absolute_time_t deadline, absolute_time_t start)
+{
+	if (addr > BUS_ADDR_MAX || is_nil_time(deadline)) return;
+
+	sleep_until(deadline);
 	absolute_time_t end = get_absolute_time();
 	printf(" done(%.3f s): %lld us\r\n",
 	       (float)to_ms_since_boot(end)/1000,
@@ -252,9 +271,9 @@ void measure_rh(uint8_t addr)
 	uint32_t t_data, h_data;
 	bool t_valid, h_valid;
 	uint8_t t_crc, h_crc;
-	r = rhs_read_values(addr,
-	                    &t_data, &t_valid, &t_crc,
-	                    &h_data, &h_valid, &h_crc);
+	int r = rhs_read_values(addr,
+	                        &t_data, &t_valid, &t_crc,
+	                        &h_data, &h_valid, &h_crc);
 	if (r != PICO_OK)
 	{
 		printf(" error: %d\r\n", r);
