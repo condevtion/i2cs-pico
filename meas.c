@@ -6,6 +6,7 @@
 #include "bus.h"
 #include "prs.h"
 #include "rhs.h"
+#include "als.h"
 
 #include "meas.h"
 
@@ -306,4 +307,56 @@ void read_rhs_data(uint8_t addr, absolute_time_t deadline, absolute_time_t start
 	{
 		printf(" (fail: 0x%02hhx)\r\n", calc_crc);
 	}
+}
+
+void probe_als(uint8_t addr, uint8_t *gain)
+{
+	if (addr > BUS_ADDR_MAX) return;
+
+	printf("Starting ambient light probing...");
+	absolute_time_t deadline;
+	int r = als_start_measure(addr, false, ALS_MEAS_GAIN_1, ALS_MEAS_RES_13, ALS_MEAS_RATE_2000, &deadline);
+	if (r != PICO_OK)
+	{
+		printf(" error: %d\r\n", r);
+		return;
+	}
+	puts(" ok\r");
+
+	absolute_time_t start = get_absolute_time();
+	sleep_until(deadline);
+	r = als_check_result(addr, ALS_STATUS_LS_DATA);
+	absolute_time_t end = get_absolute_time();
+	if (r != PICO_OK)
+	{
+		printf(" fail(%.3f s|%lld us): %d\r\n",
+		       (float)to_ms_since_boot(end)/1000,
+		       absolute_time_diff_us(start, end),
+		       r);
+		return;
+	}
+	printf(" done(%.3f s): %lld us\r\n",
+	       (float)to_ms_since_boot(end)/1000,
+	       absolute_time_diff_us(start, end));
+
+	printf("Reading preliminary ambient light sensor data...");
+	uint32_t al;
+	r = als_read_al(addr, &al);
+	if (r != PICO_OK)
+	{
+		printf(" error: %d\r\n", r);
+		return;
+	}
+	puts(" ok\r");
+
+	uint8_t _gain = als_get_gain(al);
+	printf("APDS-9999 (probe): AL: %.1f lux (0x%06lu), gain: %hhdx\r\n",
+	       (float)al * 4.5, al, als_get_gain_x(_gain));
+
+	if (gain)
+	{
+		*gain = _gain;
+	}
+
+	return;
 }

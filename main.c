@@ -52,6 +52,8 @@ int main()
 			absolute_time_t rhs_deadline, rhs_start;
 			start_measure_rhs(rhs_addr, &rhs_deadline, &rhs_start);
 
+			probe_als(als_addr, NULL);
+
 			read_rhs_data(rhs_addr, rhs_deadline, rhs_start);
 		}
 		read_prs_data(prs_addr, i, &prs_coefs, prs_k, tmp_k);

@@ -12,4 +12,6 @@ void read_prs_data(uint8_t addr, size_t n, const prs_coefs_t *coefs, int32_t prs
 void start_measure_rhs(uint8_t addr, absolute_time_t *deadline, absolute_time_t *start);
 void read_rhs_data(uint8_t addr, absolute_time_t deadline, absolute_time_t start);
 
+void probe_als(uint8_t addr, uint8_t *gain);
+
 #endif //MEAS_H
