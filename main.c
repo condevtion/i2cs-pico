@@ -52,9 +52,22 @@ int main()
 			absolute_time_t rhs_deadline, rhs_start;
 			start_measure_rhs(rhs_addr, &rhs_deadline, &rhs_start);
 
-			probe_als(als_addr, NULL);
+			uint8_t gain;
+			probe_als(als_addr, &gain);
+
+			absolute_time_t als_deadline, als_start;
+			start_measure_als(als_addr, false, gain, ALS_MEAS_RES_20,
+			                  &als_deadline, &als_start);
 
 			read_rhs_data(rhs_addr, rhs_deadline, rhs_start);
+
+			read_als_light_data(als_addr, gain, ALS_MEAS_RES_20,
+			                    als_deadline, als_start);
+
+			start_measure_als(als_addr, true, gain, ALS_MEAS_RES_20,
+			                  &als_deadline, &als_start);
+
+			read_als_color_data(als_addr, als_deadline, als_start);
 		}
 		read_prs_data(prs_addr, i, &prs_coefs, prs_k, tmp_k);
 	}

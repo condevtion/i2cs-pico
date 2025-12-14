@@ -56,7 +56,7 @@ void setup_prs(uint8_t addr, prs_coefs_t *coefs, int32_t *prs_k, int32_t *tmp_k)
 	*prs_k = prs_prc_to_k(PRS_PRC_16);
 	*tmp_k = prs_prc_to_k(PRS_PRC_1);
 
-	printf("\nConfiguring pressure sensor (p scale %d, t scale %d)...", prs_k, tmp_k);
+	printf("\nConfiguring pressure sensor (p scale %d, t scale %d)...", *prs_k, *tmp_k);
 	r = prs_config(addr, PRS_PRC_16, PRS_PRC_1);
 	if (r != PICO_OK)
 	{
@@ -121,12 +121,13 @@ void _read_tmp_raw(uint8_t addr, int32_t k, float *raw_sc)
 int _wait_for_value(uint8_t addr, int32_t prs_k, int32_t tmp_k, float *p_raw_sc, float *t_raw_sc)
 {
 	absolute_time_t start = get_absolute_time();
+	printf("SPL07-003");
 	for (int i=1; i < 100000000; i++)
 	{
 		if (!gpio_get(PRS_INT_PIN))
 		{
 			absolute_time_t end = get_absolute_time();
-			printf(" done (int@%d - 0, %.3f s): %lld us (%d clk)\r\n",
+			printf(" - done (int@%d - 0, %.3f s): %lld us (%d clk)\r\n",
 			       PRS_INT_PIN,
 			       (float)to_ms_since_boot(end)/1000,
 			       absolute_time_diff_us(start, end),
@@ -159,11 +160,13 @@ int _wait_for_value(uint8_t addr, int32_t prs_k, int32_t tmp_k, float *p_raw_sc,
 			return PICO_OK;
 		}
 
-		if (!(i%16000000))
+		sleep_us(PRS_JIFFY);
+
+		if (!(i%9600))
 		{
 			puts(".\r");
 		}
-		else if (!(i%400000))
+		else if (!(i%24))
 		{
 			putchar('.');
 		}
@@ -264,7 +267,7 @@ void read_rhs_data(uint8_t addr, absolute_time_t deadline, absolute_time_t start
 
 	sleep_until(deadline);
 	absolute_time_t end = get_absolute_time();
-	printf(" done(%.3f s): %lld us\r\n",
+	printf("ENS210 - done(%.3f s): %lld us\r\n",
 	       (float)to_ms_since_boot(end)/1000,
 	       absolute_time_diff_us(start, end));
 
@@ -314,8 +317,9 @@ void probe_als(uint8_t addr, uint8_t *gain)
 	if (addr > BUS_ADDR_MAX) return;
 
 	printf("Starting ambient light probing...");
-	absolute_time_t deadline;
-	int r = als_start_measure(addr, false, ALS_MEAS_GAIN_1, ALS_MEAS_RES_13, ALS_MEAS_RATE_2000, &deadline);
+	absolute_time_t deadline, start;
+	int r = als_start_measure(addr, false, ALS_MEAS_GAIN_1, ALS_MEAS_RES_13, ALS_MEAS_RATE_2000,
+	                          &deadline, &start);
 	if (r != PICO_OK)
 	{
 		printf(" error: %d\r\n", r);
@@ -323,7 +327,6 @@ void probe_als(uint8_t addr, uint8_t *gain)
 	}
 	puts(" ok\r");
 
-	absolute_time_t start = get_absolute_time();
 	sleep_until(deadline);
 	r = als_check_result(addr, ALS_STATUS_LS_DATA);
 	absolute_time_t end = get_absolute_time();
@@ -335,7 +338,7 @@ void probe_als(uint8_t addr, uint8_t *gain)
 		       r);
 		return;
 	}
-	printf(" done(%.3f s): %lld us\r\n",
+	printf("APDS-9999 - done(%.3f s): %lld us\r\n",
 	       (float)to_ms_since_boot(end)/1000,
 	       absolute_time_diff_us(start, end));
 
@@ -351,12 +354,95 @@ void probe_als(uint8_t addr, uint8_t *gain)
 
 	uint8_t _gain = als_get_gain(al);
 	printf("APDS-9999 (probe): AL: %.1f lux (0x%06lu), gain: %hhdx\r\n",
-	       (float)al * 4.5, al, als_get_gain_x(_gain));
+	       (float)al * 11.0, al, als_get_gain_x(_gain));
 
 	if (gain)
 	{
 		*gain = _gain;
 	}
+}
 
-	return;
+void start_measure_als(uint8_t addr, bool rgb, uint8_t gain, uint8_t res,
+                       absolute_time_t *deadline, absolute_time_t *start)
+{
+	if (addr > BUS_ADDR_MAX) return;
+
+	printf("Starting %s measurement...", rgb? "color" : "ambient light");
+	int r = als_start_measure(addr, rgb, gain, res, ALS_MEAS_RATE_2000,
+	                          deadline, start);
+	if (r != PICO_OK)
+	{
+		printf(" error: %d\r\n", r);
+		return;
+	}
+	puts(" ok\r");
+}
+
+void read_als_light_data(uint8_t addr, uint8_t gain, uint8_t res,
+                         absolute_time_t deadline, absolute_time_t start)
+{
+	if (addr > BUS_ADDR_MAX || is_nil_time(deadline)) return;
+
+	sleep_until(deadline);
+
+	int r = als_check_result(addr, ALS_STATUS_LS_DATA);
+	absolute_time_t end = get_absolute_time();
+	if (r != PICO_OK)
+	{
+		printf(" fail(%.3f s|%lld us): %d\r\n",
+		       (float)to_ms_since_boot(end)/1000,
+		       absolute_time_diff_us(start, end),
+		       r);
+		return;
+	}
+	printf("APDS-9999 - done(%.3f s): %lld us\r\n",
+	       (float)to_ms_since_boot(end)/1000,
+	       absolute_time_diff_us(start, end));
+
+	printf("Reading ambient light data...");
+	uint32_t al;
+	r = als_read_al(addr, &al);
+	if (r != PICO_OK)
+	{
+		printf(" error: %d\r\n", r);
+		return;
+	}
+	puts(" ok\r");
+
+	float scale = als_get_scale(gain, res);
+	printf("APDS-9999 AL: %.1f lux (0x%06lu @ %.3f)\r\n", (float)al * scale, al, scale);
+}
+
+void read_als_color_data(uint8_t addr, absolute_time_t deadline, absolute_time_t start)
+{
+	if (addr > BUS_ADDR_MAX || is_nil_time(deadline)) return;
+
+	sleep_until(deadline);
+
+	int r = als_check_result(addr, ALS_STATUS_LS_DATA);
+	absolute_time_t end = get_absolute_time();
+	if (r != PICO_OK)
+	{
+		printf(" fail(%.3f s|%lld us): %d\r\n",
+		       (float)to_ms_since_boot(end)/1000,
+		       absolute_time_diff_us(start, end),
+		       r);
+		return;
+	}
+	printf("APDS-9999 - done(%.3f s): %lld us\r\n",
+	       (float)to_ms_since_boot(end)/1000,
+	       absolute_time_diff_us(start, end));
+
+	printf("Reading color data...");
+	uint32_t ir, cr, cg, cb;
+	r = als_read_ir_rgb(addr, &ir, &cr, &cg, &cb);
+	if (r != PICO_OK)
+	{
+		printf(" error: %d\r\n", r);
+		return;
+	}
+	puts(" ok\r");
+
+	printf("APDS-9999 AL - IR: 0x%06lu, R: 0x%06lu, G: 0x%06lu, B: 0x%06lu\r\n",
+	       ir, cr, cg, cb);
 }

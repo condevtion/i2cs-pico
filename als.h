@@ -58,11 +58,13 @@
 int als_find(uint8_t *addr);
 int als_get_id(uint8_t addr, uint8_t *id);
 
-int als_start_measure(uint8_t addr, bool rgb, uint8_t gain, uint8_t res, uint8_t rate, absolute_time_t *deadline);
+int als_start_measure(uint8_t addr, bool rgb, uint8_t gain, uint8_t res, uint8_t rate,
+                      absolute_time_t *deadline, absolute_time_t *start);
 int als_check_result(uint8_t addr, uint8_t mask);
 int als_read_al(uint8_t addr, uint32_t *value);
 int als_read_ir_rgb(uint8_t addr, uint32_t *ir, uint32_t *r, uint32_t *g, uint32_t *b);
 uint8_t als_get_gain(uint32_t al);
 uint8_t als_get_gain_x(uint8_t gain);
+float als_get_scale(uint8_t gain, uint8_t res);
 
 #endif //ALS_H

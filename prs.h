@@ -43,6 +43,8 @@
 #define PRS_PRC_64  0x06
 #define PRS_PRC_128 0x07
 
+#define PRS_JIFFY 3600 // Minimal measurement time - 3.6 ms
+
 #define PRS_PRS_RDY  0x10
 #define PRS_TMP_RDY  0x20
 #define PRS_COEF_RDY 0x80

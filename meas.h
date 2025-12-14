@@ -13,5 +13,10 @@ void start_measure_rhs(uint8_t addr, absolute_time_t *deadline, absolute_time_t 
 void read_rhs_data(uint8_t addr, absolute_time_t deadline, absolute_time_t start);
 
 void probe_als(uint8_t addr, uint8_t *gain);
+void start_measure_als(uint8_t addr, bool rgb, uint8_t gain, uint8_t res,
+                       absolute_time_t *deadline, absolute_time_t *start);
+void read_als_light_data(uint8_t addr, uint8_t gain, uint8_t res,
+                         absolute_time_t deadline, absolute_time_t start);
+void read_als_color_data(uint8_t addr, absolute_time_t deadline, absolute_time_t start);
 
 #endif //MEAS_H

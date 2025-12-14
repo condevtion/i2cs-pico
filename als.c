@@ -41,7 +41,8 @@ int als_get_id(uint8_t addr, uint8_t *id)
 	return PICO_OK;
 }
 
-int als_start_measure(uint8_t addr, bool rgb, uint8_t gain, uint8_t res, uint8_t rate, absolute_time_t *deadline)
+int als_start_measure(uint8_t addr, bool rgb, uint8_t gain, uint8_t res, uint8_t rate,
+                      absolute_time_t *deadline, absolute_time_t *start)
 {
 	int r = bus_write_byte(addr, ALS_REG_LS_MEAS_RATE,
 	                       ((res & ALS_MEAS_MASK) << 4) | (rate & ALS_MEAS_MASK));
@@ -63,10 +64,15 @@ int als_start_measure(uint8_t addr, bool rgb, uint8_t gain, uint8_t res, uint8_t
 		return r;
 	}
 
+	absolute_time_t _start = get_absolute_time();
+	if (start)
+	{
+		*start = _start;
+	}
+
 	if (deadline)
 	{
-		*deadline = delayed_by_us(get_absolute_time(),
-		                          _integration_times[res & ALS_MEAS_MASK]);
+		*deadline = delayed_by_us(_start, _integration_times[res & ALS_MEAS_MASK]);
 	}
 
 	return PICO_OK;
@@ -159,8 +165,8 @@ uint8_t als_get_gain_x(uint8_t gain)
 {
 	switch (gain)
 	{
-	case ALS_MEAS_GAIN_3:
-		return 3;
+	case ALS_MEAS_GAIN_1:
+		return 1;
 	case ALS_MEAS_GAIN_6:
 		return 6;
 	case ALS_MEAS_GAIN_9:
@@ -169,5 +175,89 @@ uint8_t als_get_gain_x(uint8_t gain)
 		return 18;
 	}
 
-	return 1;
+	// Default gain 3x
+	return 3;
+}
+
+float als_get_scale(uint8_t gain, uint8_t res)
+{
+	switch (gain)
+	{
+	case ALS_MEAS_GAIN_1:
+		switch (res)
+		{
+		case ALS_MEAS_RES_16:
+			return 2.193;
+		case ALS_MEAS_RES_17:
+			return 1.099;
+		case ALS_MEAS_RES_19:
+			return 0.273;
+		case ALS_MEAS_RES_20:
+			return 0.136;
+		}
+
+		// Default resolution 18 bit
+		return 0.548;
+	case ALS_MEAS_GAIN_6:
+		switch (res)
+		{
+		case ALS_MEAS_RES_16:
+			return 0.360;
+		case ALS_MEAS_RES_17:
+			return 0.179;
+		case ALS_MEAS_RES_19:
+			return 0.045;
+		case ALS_MEAS_RES_20:
+			return 0.022;
+		}
+
+		// Default resolution 18 bit
+		return 0.090;
+	case ALS_MEAS_GAIN_9:
+		switch (res)
+		{
+		case ALS_MEAS_RES_16:
+			return 0.239;
+		case ALS_MEAS_RES_17:
+			return 0.119;
+		case ALS_MEAS_RES_19:
+			return 0.030;
+		case ALS_MEAS_RES_20:
+			return 0.015;
+		}
+
+		// Default resolution 18 bit
+		return 0.059;
+	case ALS_MEAS_GAIN_18:
+		switch (res)
+		{
+		case ALS_MEAS_RES_16:
+			return 0.117;
+		case ALS_MEAS_RES_17:
+			return 0.059;
+		case ALS_MEAS_RES_19:
+			return 0.015;
+		case ALS_MEAS_RES_20:
+			return 0.007;
+		}
+
+		// Default resolution 18 bit
+		return 0.029;
+	}
+
+	// Default gain 3x
+	switch (res)
+	{
+	case ALS_MEAS_RES_16:
+		return 0.722;
+	case ALS_MEAS_RES_17:
+		return 0.359;
+	case ALS_MEAS_RES_19:
+		return 0.090;
+	case ALS_MEAS_RES_20:
+		return 0.045;
+	}
+
+	// Default resolution 18 bit
+	return 0.180;
 }
