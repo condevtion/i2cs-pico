@@ -43,7 +43,7 @@
 #define PRS_PRC_64  0x06
 #define PRS_PRC_128 0x07
 
-#define PRS_JIFFY 3600 // Minimal measurement time - 3.6 ms
+#define PRS_JIFFY 1200 // 1/3 minimal measurement time - 3.6 ms
 
 #define PRS_PRS_RDY  0x10
 #define PRS_TMP_RDY  0x20
@@ -98,7 +98,8 @@ int prs_check_coefs(uint8_t addr, bool *rdy);
 int prs_wait_coefs(uint8_t addr, bool *rdy);
 int prs_read_coefs(uint8_t addr, prs_coefs_t *coefs);
 int prs_config(uint8_t addr, uint8_t pm_prc, uint8_t tmp_prc);
-int prs_meas_config(uint8_t addr);
+int prs_meas_config_prs(uint8_t addr);
+int prs_meas_config_tmp(uint8_t addr);
 int prs_meas_stop(uint8_t addr);
 int prs_get_prs_raw(uint8_t addr, int32_t *prs);
 int prs_get_tmp_raw(uint8_t addr, int32_t *tmp);

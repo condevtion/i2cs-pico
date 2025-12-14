@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <math.h>
 
 #include "pico/binary_info.h"
 #include "pico/stdlib.h"
@@ -14,6 +15,8 @@
 #define PROJ_DESC "I2CS Board RPi2 Example"
 
 #define INTERVAL 400
+#define TIME_ALIGNMENT 2 // Align measurement cycle to the given value in seconds
+#define MEAS_CYCLE 900   // Measurement cycle time estimation in ms
 
 int main()
 {
@@ -41,34 +44,57 @@ int main()
 	int32_t prs_k, tmp_k;
 	setup_prs(prs_addr, &prs_coefs, &prs_k, &tmp_k);
 
+	uint32_t now = to_ms_since_boot(get_absolute_time());
+	size_t offset = (size_t)now / 1000 / TIME_ALIGNMENT;
+	uint32_t rem = (uint32_t)(offset + 1) * TIME_ALIGNMENT * 1000 - now;
+	if (rem < MEAS_CYCLE)
+	{
+		++offset;
+		rem += TIME_ALIGNMENT * 1000;
+	}
+	printf("Starting at offset %lu (%lu ms remains for the first cycle)\r\n", offset, rem);
+
 	i = 0;
 	while(1)
 	{
-		i++;
+		printf("%lu: %.3f s\r\n", ++i, (float)now / 1000);
 
-		start_measure_prs(prs_addr);
-		if (i > 1)
-		{
-			absolute_time_t rhs_deadline, rhs_start;
-			start_measure_rhs(rhs_addr, &rhs_deadline, &rhs_start);
+		absolute_time_t prs_start = nil_time;
+		start_measure_prs_tmp(prs_addr, &prs_start);
 
-			uint8_t gain;
-			probe_als(als_addr, &gain);
+		float tmp_raw_sc = NAN;
+		read_prs_tmp_raw_data(prs_addr, tmp_k, &tmp_raw_sc, prs_start);
 
-			absolute_time_t als_deadline, als_start;
-			start_measure_als(als_addr, false, gain, ALS_MEAS_RES_20,
-			                  &als_deadline, &als_start);
+		prs_start = nil_time;
+		start_measure_prs(prs_addr, &prs_start);
 
-			read_rhs_data(rhs_addr, rhs_deadline, rhs_start);
+		absolute_time_t rhs_deadline, rhs_start;
+		start_measure_rhs(rhs_addr, &rhs_deadline, &rhs_start);
 
-			read_als_light_data(als_addr, gain, ALS_MEAS_RES_20,
-			                    als_deadline, als_start);
+		uint8_t gain;
+		probe_als(als_addr, &gain);
 
-			start_measure_als(als_addr, true, gain, ALS_MEAS_RES_20,
-			                  &als_deadline, &als_start);
+		absolute_time_t als_deadline, als_start;
+		start_measure_als(als_addr, false, gain, ALS_MEAS_RES_20,
+		                  &als_deadline, &als_start);
 
-			read_als_color_data(als_addr, als_deadline, als_start);
-		}
-		read_prs_data(prs_addr, i, &prs_coefs, prs_k, tmp_k);
+		float prs_raw_sc = NAN;
+		read_prs_raw_data(prs_addr, prs_k, &prs_raw_sc, prs_start);
+		calc_prs(prs_addr, &prs_coefs, tmp_raw_sc, prs_raw_sc);
+
+		read_rhs_data(rhs_addr, rhs_deadline, rhs_start);
+
+		read_als_light_data(als_addr, gain, ALS_MEAS_RES_20,
+		                    als_deadline, als_start);
+
+		start_measure_als(als_addr, true, gain, ALS_MEAS_RES_20,
+		                  &als_deadline, &als_start);
+
+		read_als_color_data(als_addr, als_deadline, als_start);
+
+		absolute_time_t target = from_us_since_boot((uint64_t)(i + offset) * TIME_ALIGNMENT * 1000000);
+		sleep_until(target);
+
+		now = to_ms_since_boot(get_absolute_time());
 	}
 }

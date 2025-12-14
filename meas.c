@@ -118,11 +118,54 @@ void _read_tmp_raw(uint8_t addr, int32_t k, float *raw_sc)
 	}
 }
 
-int _wait_for_value(uint8_t addr, int32_t prs_k, int32_t tmp_k, float *p_raw_sc, float *t_raw_sc)
+void start_measure_prs(uint8_t addr, absolute_time_t *start)
 {
-	absolute_time_t start = get_absolute_time();
+	if (addr > BUS_ADDR_MAX) return;
+
+	printf("Interrupt pin(%d): %d\r\n", PRS_INT_PIN, gpio_get(PRS_INT_PIN));
+
+	printf("Starting pressure measurement...");
+	int r = prs_meas_config_prs(addr);
+	if (r != PICO_OK)
+	{
+		printf(" error: %d\r\n", r);
+		return;
+	}
+	puts(" ok\r");
+
+	if (start)
+	{
+		*start = get_absolute_time();
+	}
+}
+
+void start_measure_prs_tmp(uint8_t addr, absolute_time_t *start)
+{
+	if (addr > BUS_ADDR_MAX) return;
+
+	printf("Interrupt pin(%d): %d\r\n", PRS_INT_PIN, gpio_get(PRS_INT_PIN));
+
+	printf("Starting temperature measurement with pressure sensor...");
+	int r = prs_meas_config_tmp(addr);
+	if (r != PICO_OK)
+	{
+		printf(" error: %d\r\n", r);
+		return;
+	}
+	puts(" ok\r");
+
+	if (start)
+	{
+		*start = get_absolute_time();
+	}
+}
+
+void read_prs_raw_data(uint8_t addr, int32_t k, float *p_raw_sc, absolute_time_t start)
+{
+	if (addr > BUS_ADDR_MAX || is_nil_time(start)) return;
+
 	printf("SPL07-003");
-	for (int i=1; i < 100000000; i++)
+	for (size_t i=1; i < 4166667; i++)
 	{
 		if (!gpio_get(PRS_INT_PIN))
 		{
@@ -139,7 +182,7 @@ int _wait_for_value(uint8_t addr, int32_t prs_k, int32_t tmp_k, float *p_raw_sc,
 			if (r != PICO_OK)
 			{
 				printf(" error: %d\r\n", r);
-				return r;
+				return;
 			}
 			printf(" PRS_RDY: %c, TMP_RDY: %c\r\n",
 			       (cfg & PRS_PRS_RDY)? 'Y':'N',
@@ -149,75 +192,91 @@ int _wait_for_value(uint8_t addr, int32_t prs_k, int32_t tmp_k, float *p_raw_sc,
 
 			if (cfg & PRS_PRS_RDY)
 			{
-				_read_prs_raw(addr, prs_k, p_raw_sc);
+				_read_prs_raw(addr, k, p_raw_sc);
 			}
 
-			if (cfg & PRS_TMP_RDY)
-			{
-				_read_tmp_raw(addr, tmp_k, t_raw_sc);
-			}
-
-			return PICO_OK;
+			return;
 		}
 
 		sleep_us(PRS_JIFFY);
 
-		if (!(i%9600))
+		if (!(i%28800))
 		{
 			puts(".\r");
 		}
-		else if (!(i%24))
+		else if (!(i%72))
 		{
 			putchar('.');
 		}
 	}
-
-	return PICO_ERROR_GENERIC;
 }
 
-void start_measure_prs(uint8_t addr)
+
+void read_prs_tmp_raw_data(uint8_t addr, int32_t k, float *t_raw_sc, absolute_time_t start)
 {
-	if (addr > BUS_ADDR_MAX) return;
+	if (addr > BUS_ADDR_MAX || is_nil_time(start)) return;
 
-	printf("Interrupt pin(%d): %d\r\n", PRS_INT_PIN, gpio_get(PRS_INT_PIN));
-
-	printf("Starting pressure measurement...");
-	int r = prs_meas_config(addr);
-	if (r != PICO_OK)
+	printf("SPL07-003");
+	for (size_t i=1; i < 4166667; i++)
 	{
-		printf(" error: %d\r\n", r);
-		return;
+		if (!gpio_get(PRS_INT_PIN))
+		{
+			absolute_time_t end = get_absolute_time();
+			printf(" - done (int@%d - 0, %.3f s): %lld us (%d clk)\r\n",
+			       PRS_INT_PIN,
+			       (float)to_ms_since_boot(end)/1000,
+			       absolute_time_diff_us(start, end),
+			       i);
+
+			printf("Reading pressure sensor operating status...");
+			uint8_t cfg = 0;
+			int r = bus_read_byte(addr, PRS_MEAS_CFG, &cfg);
+			if (r != PICO_OK)
+			{
+				printf(" error: %d\r\n", r);
+				return;
+			}
+			printf(" PRS_RDY: %c, TMP_RDY: %c\r\n",
+			       (cfg & PRS_PRS_RDY)? 'Y':'N',
+			       (cfg & PRS_TMP_RDY)? 'Y':'N');
+
+			_clr_int(addr);
+
+			if (cfg & PRS_TMP_RDY)
+			{
+				_read_tmp_raw(addr, k, t_raw_sc);
+			}
+
+			return;
+		}
+
+		sleep_us(PRS_JIFFY);
+
+		if (!(i%28800))
+		{
+			puts(".\r");
+		}
+		else if (!(i%72))
+		{
+			putchar('.');
+		}
 	}
-	puts(" ok\r");
 }
 
-void read_prs_data(uint8_t addr, size_t n, const prs_coefs_t *coefs, int32_t prs_k, int32_t tmp_k)
+void calc_prs(uint8_t addr, const prs_coefs_t *coefs, float t_raw_sc, float p_raw_sc)
 {
 	if (addr > BUS_ADDR_MAX) return;
-
-	float p_raw_sc = NAN, t_raw_sc = NAN;
-	if (_wait_for_value(addr, prs_k, tmp_k, &p_raw_sc, &t_raw_sc) != PICO_OK)
-	{
-		return;
-	}
-
-	if ((isnan(p_raw_sc) || isnan(t_raw_sc)) &&
-	    _wait_for_value(addr, prs_k, tmp_k, &p_raw_sc, &t_raw_sc) != PICO_OK)
-	{
-		return;
-	}
 
 	if (isnan(t_raw_sc))
 	{
-		printf("SPL07-003(%lu) - T: NaN, P: NaN\r\n", n);
+		puts("SPL07-003 - T: NaN, P: NaN\r");
 		return;
 	}
 
 	float t = coefs->c0*0.5 + coefs->c1 * t_raw_sc;
-
 	if (isnan(p_raw_sc))
 	{
-		printf("SPL07-003(%lu) - T: %+.1f C, P: NaN\r\n", t);
+		printf("SPL07-003 - T: %+.1f C, P: NaN\r\n", t);
 		return;
 	}
 
@@ -226,9 +285,8 @@ void read_prs_data(uint8_t addr, size_t n, const prs_coefs_t *coefs, int32_t prs
 	float p3 = p2 * p;
 	float p4 = p3 * p;
 	float pt_corr = t_raw_sc*(coefs->c01 + coefs->c11*p + coefs->c21*p2 + coefs->c31*p3);
-
 	p = pt_corr + coefs->c00 + coefs->c10*p + coefs->c20*p2 + coefs->c30*p3 + coefs->c40*p4;
-	printf("SPL07-003(%lu) - T: %+.1f C, P: %.2f mbar\r\n", n, t, p/100);
+	printf("SPL07-003 - T: %+.1f C, P: %.2f mbar\r\n", t, p/100);
 }
 
 void start_measure_rhs(uint8_t addr, absolute_time_t *deadline, absolute_time_t *start)

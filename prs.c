@@ -175,9 +175,14 @@ int prs_config(uint8_t addr, uint8_t pm_prc, uint8_t tmp_prc)
 	return bus_write_byte(addr, PRS_CFG_REG, cfg);
 }
 
-int prs_meas_config(uint8_t addr)
+int prs_meas_config_prs(uint8_t addr)
 {
-	return bus_write_byte(addr, PRS_MEAS_CFG, PRS_MEAS_CTRL_CPT);
+	return bus_write_byte(addr, PRS_MEAS_CFG, PRS_MEAS_CTRL_P);
+}
+
+int prs_meas_config_tmp(uint8_t addr)
+{
+	return bus_write_byte(addr, PRS_MEAS_CFG, PRS_MEAS_CTRL_T);
 }
 
 int prs_meas_stop(uint8_t addr)
